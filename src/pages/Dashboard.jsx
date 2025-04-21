@@ -1,23 +1,21 @@
 // src/pages/Dashboard.jsx
 import React, { useEffect, useState } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Box,
+  Grid,
+  Typography,
   Paper,
   IconButton,
-  Typography,
-  CircularProgress,
-  Box
+  Tooltip,
+  Avatar
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import { useNavigate } from "react-router-dom";
+import { DataGrid } from "@mui/x-data-grid";
 
 import { getStudents, deleteStudent, searchStudents } from "../firebase/studentService";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import PeopleIcon from "@mui/icons-material/People";
+import { useNavigate } from "react-router-dom";
 import SearchBar from "../components/SearchBar";
 
 const Dashboard = () => {
@@ -27,19 +25,13 @@ const Dashboard = () => {
 
   const fetchStudents = async () => {
     setLoading(true);
-    try {
-      const data = await getStudents();
-      setStudents(data);
-    } catch (error) {
-      console.error("Error fetching students:", error);
-    } finally {
-      setLoading(false);
-    }
+    const data = await getStudents();
+    setStudents(data);
+    setLoading(false);
   };
 
   const handleDelete = async (id) => {
-    const confirm = window.confirm("Are you sure you want to delete this student?");
-    if (confirm) {
+    if (window.confirm("Are you sure you want to delete this student?")) {
       await deleteStudent(id);
       fetchStudents();
     }
@@ -47,14 +39,10 @@ const Dashboard = () => {
 
   const handleSearch = async (query) => {
     if (!query) {
-      fetchStudents(); // Reset
+      fetchStudents();
     } else {
-      try {
-        const results = await searchStudents(query);
-        setStudents(results);
-      } catch (err) {
-        console.error("Search error:", err);
-      }
+      const results = await searchStudents(query);
+      setStudents(results);
     }
   };
 
@@ -62,61 +50,84 @@ const Dashboard = () => {
     fetchStudents();
   }, []);
 
+  const courseSummary = students.reduce((acc, student) => {
+    const course = student.course || "Unknown";
+    acc[course] = (acc[course] || 0) + 1;
+    return acc;
+  }, {});
+
+  const chartData = Object.entries(courseSummary).map(([course, count]) => ({
+    course,
+    count
+  }));
+
+  const columns = [
+    { field: "name", headerName: "Name", flex: 1 },
+    { field: "studentId", headerName: "Student ID", flex: 1 },
+    { field: "email", headerName: "Email", flex: 1.2 },
+    { field: "course", headerName: "Course", flex: 1 },
+    {
+      field: "actions",
+      headerName: "Actions",
+      flex: 0.6,
+      renderCell: (params) => (
+        <Box display="flex" gap={1}>
+          <Tooltip title="Edit">
+            <IconButton color="primary" onClick={() => navigate(`/edit/${params.row.id}`)}>
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton color="error" onClick={() => handleDelete(params.row.id)}>
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )
+    }
+  ];
+
   return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        All Registered Students
+    <Box sx={{ px: 3 }}>
+      <Typography variant="h4" fontWeight={600} gutterBottom>
+        📊 Student Dashboard
       </Typography>
 
+      {/* Summary Cards + Chart */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper elevation={4} sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
+            <Avatar sx={{ bgcolor: "#1976d2" }}>
+              <PeopleIcon />
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle2">Total Students</Typography>
+              <Typography variant="h6">{students.length}</Typography>
+            </Box>
+          </Paper>
+        </Grid>
+
+        
+      </Grid>
+
+      {/* Search Bar */}
       <SearchBar onSearch={handleSearch} />
 
-      {loading ? (
-        <Box textAlign="center" mt={3}>
-          <CircularProgress />
-          <Typography mt={1}>Loading student data...</Typography>
-        </Box>
-      ) : students.length === 0 ? (
-        <Typography>No students found.</Typography>
-      ) : (
-        <TableContainer component={Paper} sx={{ mt: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Student ID</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Course</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {students.map((student) => (
-                <TableRow key={student.id}>
-                  <TableCell>{student.name}</TableCell>
-                  <TableCell>{student.studentId}</TableCell>
-                  <TableCell>{student.email}</TableCell>
-                  <TableCell>{student.course}</TableCell>
-                  <TableCell>
-                    <IconButton
-                      color="primary"
-                      onClick={() => navigate(`/edit/${student.id}`)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(student.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Paper>
+      {/* Student Table */}
+      <Paper elevation={4} sx={{ mt: 2, height: 500, p: 2 }}>
+        <DataGrid
+          rows={students}
+          columns={columns}
+          getRowId={(row) => row.id}
+          loading={loading}
+          disableRowSelectionOnClick
+          sx={{
+            borderRadius: 2,
+            backgroundColor: "#fff"
+          }}
+        />
+      </Paper>
+    </Box>
   );
 };
 
